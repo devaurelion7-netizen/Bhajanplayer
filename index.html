@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bhajans Player</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Markdown Parser for AI responses -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <style>
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .playing-animation {
+            display: flex; align-items: flex-end; height: 15px; gap: 2px;
+        }
+        .bar {
+            width: 3px; background-color: #f97316;
+            animation: bounce 1s infinite ease-in-out;
+        }
+        .bar:nth-child(1) { animation-delay: 0.1s; height: 40%; }
+        .bar:nth-child(2) { animation-delay: 0.3s; height: 100%; }
+        .bar:nth-child(3) { animation-delay: 0.5s; height: 60%; }
+        @keyframes bounce {
+            0%, 100% { height: 20%; }
+            50% { height: 100%; }
+        }
+        
+        /* Markdown Styles */
+        .prose p { margin-bottom: 0.5em; }
+        .prose strong { color: #fdba74; }
+        
+        /* Volume Slider Custom Styling */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+            margin-top: -4px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            height: 4px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white font-sans h-screen overflow-hidden flex flex-col">
+
+    <!-- Greeting Modal -->
+    <div id="greetingModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm transition-opacity duration-300">
+        <div class="bg-slate-800 border border-orange-500/50 p-8 rounded-2xl shadow-2xl text-center max-w-sm mx-4 transform transition-all scale-100">
+            <div class="mx-auto w-16 h-16 bg-orange-500/20 rounded-full flex items-center justify-center mb-4">
+                <i data-lucide="sun" class="w-8 h-8 text-orange-500"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-white mb-2">Jay Sachidanand!</h2>
+            <p class="text-slate-400 mb-6 text-sm">Welcome to your Smart Bhajans library.</p>
+            <button onclick="closeGreeting()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-full transition duration-200">
+                Continue
+            </button>
+        </div>
+    </div>
+
+    <!-- AI/Settings Modal -->
+    <div id="aiModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+        <div class="bg-slate-800 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[80vh]">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center">
+                <h3 id="aiModalTitle" class="font-bold text-lg flex items-center gap-2">
+                    <i data-lucide="sparkles" class="text-orange-400"></i> AI Insight
+                </h3>
+                <button onclick="closeAiModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="aiModalContent" class="p-6 overflow-y-auto prose text-slate-300 text-sm leading-relaxed">
+                <!-- Content injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+        <div class="bg-slate-800 border border-slate-700 w-full max-w-sm rounded-2xl p-6">
+            <h3 class="font-bold text-lg mb-4 text-white">Settings</h3>
+            <label class="block text-xs text-slate-400 mb-2">Google Gemini API Key</label>
+            <input type="password" id="apiKeyInput" placeholder="Paste API Key here..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none mb-4">
+            <p class="text-xs text-slate-500 mb-4">Required for AI features. Key is stored locally on your device.</p>
+            <button onclick="saveSettings()" class="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-lg font-medium">Save</button>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="p-4 bg-slate-800 shadow-lg z-10 flex justify-between items-center border-b border-orange-500/10">
+        <div class="flex items-center gap-2">
+            <i data-lucide="music" class="text-orange-500"></i>
+            <h1 class="font-bold text-lg tracking-wide">Bhajans</h1>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="openSettings()" class="p-2 bg-slate-700 rounded-full hover:bg-slate-600 transition text-slate-300">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+            </button>
+            <button onclick="refreshLibrary()" class="p-2 bg-slate-700 rounded-full hover:bg-slate-600 transition text-orange-400">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Search Bar with AI -->
+    <div class="px-4 py-3 bg-slate-800/50 flex gap-2">
+        <div class="relative flex-1">
+            <input type="text" id="searchInput" placeholder="Search or describe mood..." 
+                   class="w-full bg-slate-700 text-sm pl-4 pr-10 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-orange-500 transition placeholder-slate-500">
+        </div>
+        <button onclick="performAiSearch()" class="bg-slate-700 hover:bg-orange-500/20 text-orange-500 border border-orange-500/30 px-3 rounded-full transition flex items-center gap-1 active:scale-95" title="AI Smart Search">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+        </button>
+    </div>
+
+    <!-- Main Content: Playlist -->
+    <main class="flex-1 overflow-y-auto scrollbar-hide relative" id="playlist-container">
+        <!-- Loading State -->
+        <div id="loader" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+            <div class="animate-spin mb-4 text-orange-500">
+                <i data-lucide="loader-2" class="w-8 h-8"></i>
+            </div>
+            <p class="text-sm">Syncing with Drive...</p>
+        </div>
+
+        <!-- Song List -->
+        <div id="song-list" class="pb-32 px-2 pt-2"></div>
+    </main>
+
+    <!-- Player Controls -->
+    <div class="h-auto bg-slate-800 border-t border-slate-700 p-4 pb-6 z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.3)]">
+        <!-- Progress Bar -->
+        <div class="w-full flex items-center gap-3 mb-4 text-xs text-slate-400">
+            <span id="currentTime">0:00</span>
+            <input type="range" id="progressBar" value="0" class="flex-1 h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-orange-500">
+            <span id="duration">0:00</span>
+        </div>
+
+        <!-- Song Info -->
+        <div class="flex justify-between items-start mb-4 px-2">
+            <div class="flex-1 min-w-0 pr-4">
+                <h2 id="currentTitle" class="text-white font-bold text-lg truncate">No Bhajan Selected</h2>
+                <p id="currentAlbum" class="text-slate-400 text-sm truncate">Select a track to play</p>
+            </div>
+            <!-- AI Insight Button -->
+            <button onclick="getBhajanInsight()" class="shrink-0 p-2 rounded-full bg-orange-500/10 text-orange-400 hover:bg-orange-500 hover:text-white transition" title="Explain Meaning">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <!-- Main Transport Controls -->
+        <div class="flex flex-col items-center gap-5">
+            <div class="flex justify-between items-center w-full max-w-xs px-2">
+                <!-- Shuffle -->
+                <button onclick="toggleShuffle()" id="shuffleBtn" class="text-slate-400 hover:text-white transition active:scale-95 p-2 rounded-full hover:bg-white/5" title="Shuffle">
+                    <i data-lucide="shuffle" class="w-5 h-5"></i>
+                </button>
+                
+                <!-- Prev -->
+                <button onclick="playPrev()" class="text-slate-300 hover:text-white transition active:scale-95 p-2">
+                    <i data-lucide="skip-back" class="w-7 h-7"></i>
+                </button>
+                
+                <!-- Play/Pause -->
+                <button onclick="togglePlay()" class="bg-orange-500 text-white rounded-full p-4 shadow-lg shadow-orange-900/40 hover:bg-orange-600 hover:scale-105 transition transform active:scale-95">
+                    <i id="playIcon" data-lucide="play" class="w-7 h-7 fill-current ml-1"></i>
+                </button>
+                
+                <!-- Next -->
+                <button onclick="playNext(true)" class="text-slate-300 hover:text-white transition active:scale-95 p-2">
+                    <i data-lucide="skip-forward" class="w-7 h-7"></i>
+                </button>
+                
+                <!-- Repeat -->
+                <button onclick="toggleRepeat()" id="repeatBtn" class="text-slate-400 hover:text-white transition active:scale-95 p-2 rounded-full hover:bg-white/5 relative" title="Repeat One">
+                    <i data-lucide="repeat" class="w-5 h-5"></i>
+                    <span id="repeatIndicator" class="hidden absolute top-1 right-1 text-[8px] font-bold bg-orange-500 text-white rounded-full w-3 h-3 flex items-center justify-center">1</span>
+                </button>
+            </div>
+
+            <!-- Volume Control -->
+            <div class="flex items-center gap-3 w-full max-w-xs px-4">
+                <button onclick="toggleMute()" id="muteBtn" class="text-slate-400 hover:text-white transition">
+                    <i id="volumeIcon" data-lucide="volume-2" class="w-4 h-4"></i>
+                </button>
+                <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" 
+                       class="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-slate-400 hover:accent-orange-500 transition-colors">
+            </div>
+        </div>
+    </div>
+
+    <audio id="audioPlayer"></audio>
+
+    <script>
+        // --- CONFIGURATION ---
+        const API_URL = "PASTE_YOUR_WEB_APP_URL_HERE"; 
+        
+        // --- GEMINI CONFIG ---
+        const systemKey = ""; 
+        
+        // --- STATE ---
+        let songs = [];
+        let currentSongIndex = -1;
+        let isPlaying = false;
+        let isShuffle = false;
+        let isRepeatOne = false; // "Repeat One" mode
+        let lastVolume = 1;
+        
+        const audio = document.getElementById('audioPlayer');
+        const progressBar = document.getElementById('progressBar');
+        const volumeSlider = document.getElementById('volumeSlider');
+        
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            fetchSongs();
+            loadSettings();
+            
+            // Audio Events
+            audio.addEventListener('timeupdate', updateProgress);
+            audio.addEventListener('ended', () => playNext(false)); // Auto play next
+            audio.addEventListener('loadedmetadata', () => {
+                document.getElementById('duration').textContent = formatTime(audio.duration);
+            });
+            
+            // Controls Events
+            document.getElementById('searchInput').addEventListener('input', (e) => filterSongs(e.target.value));
+            
+            progressBar.addEventListener('input', (e) => {
+                const seekTime = (audio.duration / 100) * e.target.value;
+                audio.currentTime = seekTime;
+            });
+
+            volumeSlider.addEventListener('input', (e) => {
+                const vol = e.target.value;
+                audio.volume = vol;
+                updateVolumeIcon(vol);
+            });
+        });
+
+        // --- GREETING MODAL ---
+        function closeGreeting() {
+            const modal = document.getElementById('greetingModal');
+            modal.style.opacity = '0';
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        // --- SETTINGS ---
+        function openSettings() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+            document.getElementById('apiKeyInput').value = localStorage.getItem('gemini_api_key') || '';
+        }
+        function saveSettings() {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            if(key) localStorage.setItem('gemini_api_key', key);
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+        function loadSettings() {
+            // Check if key exists
+        }
+
+        // --- API & DATA ---
+        async function fetchSongs() {
+            if(API_URL === "PASTE_YOUR_WEB_APP_URL_HERE") {
+                console.warn("Please edit index.html and add your Apps Script URL!");
+            }
+            const loader = document.getElementById('loader');
+            
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                songs = data;
+                loader.classList.add('hidden');
+                renderSongs(songs);
+            } catch (error) {
+                if(API_URL !== "PASTE_YOUR_WEB_APP_URL_HERE") {
+                    loader.innerHTML = `<p class="text-red-400 text-center px-4">Error loading music.<br>${error.message}</p>`;
+                }
+            }
+        }
+
+        function refreshLibrary() {
+            document.getElementById('song-list').innerHTML = '';
+            document.getElementById('loader').classList.remove('hidden');
+            fetchSongs();
+        }
+
+        // --- UI RENDERING ---
+        function renderSongs(songsToRender) {
+            const list = document.getElementById('song-list');
+            list.innerHTML = '';
+            
+            if (songsToRender.length === 0) {
+                list.innerHTML = '<p class="text-center text-slate-500 mt-10">No bhajans found.</p>';
+                return;
+            }
+
+            songsToRender.forEach((song) => {
+                const masterIndex = songs.findIndex(s => s.id === song.id);
+                const el = document.createElement('div');
+                const isActive = currentSongIndex === masterIndex;
+                
+                el.className = `flex items-center justify-between p-3 mb-2 rounded-xl cursor-pointer hover:bg-slate-800/50 transition border border-transparent ${isActive ? 'border-orange-500/30 bg-slate-800' : ''}`;
+                el.onclick = () => playSong(masterIndex);
+                
+                el.innerHTML = `
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <div class="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center shrink-0 text-slate-400 font-bold">
+                            ${isActive && isPlaying 
+                                ? '<div class="playing-animation"><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>' 
+                                : '<i data-lucide="music" class="w-5 h-5"></i>'}
+                        </div>
+                        <div class="min-w-0">
+                            <h3 class="font-medium text-sm truncate text-white ${isActive ? 'text-orange-400' : ''}">${song.name}</h3>
+                            <p class="text-xs text-slate-500 truncate">${song.album || 'Unknown Album'}</p>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(el);
+            });
+            lucide.createIcons();
+        }
+
+        function filterSongs(query) {
+            const lowerQuery = query.toLowerCase();
+            const filtered = songs.filter(song => 
+                song.name.toLowerCase().includes(lowerQuery) || 
+                (song.album && song.album.toLowerCase().includes(lowerQuery))
+            );
+            renderSongs(filtered);
+        }
+
+        // --- GEMINI AI INTEGRATION ---
+        function getApiKey() {
+            return localStorage.getItem('gemini_api_key') || systemKey;
+        }
+
+        async function callGemini(prompt) {
+            const key = getApiKey();
+            if (!key) {
+                alert("Please add your Gemini API Key in Settings first!");
+                openSettings();
+                return null;
+            }
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${key}`;
+            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text;
+            } catch (e) {
+                console.error("Gemini Error:", e);
+                return "Sorry, I couldn't connect to the spiritual realm right now.";
+            }
+        }
+
+        async function getBhajanInsight() {
+            if (currentSongIndex === -1) { alert("Play a song first to get insight!"); return; }
+            showAiModal("Contemplating...", true);
+            const song = songs[currentSongIndex];
+            const prompt = `You are a spiritual guide. Explain the spiritual meaning, deity, and significance of the Bhajan titled "${song.name}". If ambiguous, give a general spiritual interpretation. Keep it inspiring, under 100 words, and formatted in Markdown. Start with "Jay Sachidanand".`;
+            const response = await callGemini(prompt);
+            if(response) showAiModal(response, false);
+        }
+
+        async function performAiSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+            const searchBtn = document.querySelector('button[onclick="performAiSearch()"]');
+            const originalIcon = searchBtn.innerHTML;
+            searchBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
+            const songList = songs.map(s => s.name).slice(0, 100); 
+            const prompt = `I have a playlist of songs: ${JSON.stringify(songList)}. The user is searching for: "${query}". Return a JSON array of strings containing ONLY the exact names of the songs from the list that best match the user's mood, deity, or theme. If nothing matches well, return an empty array. Example output: ["Song A", "Song B"]`;
+            const response = await callGemini(prompt);
+            searchBtn.innerHTML = originalIcon;
+            lucide.createIcons();
+            if (response) {
+                try {
+                    const jsonStr = response.replace(/```json|```/g, '').trim();
+                    const matches = JSON.parse(jsonStr);
+                    if (Array.isArray(matches) && matches.length > 0) {
+                        const filtered = songs.filter(s => matches.includes(s.name));
+                        renderSongs(filtered);
+                        document.getElementById('song-list').insertAdjacentHTML('afterbegin', `<div class="text-xs text-orange-400 p-2 mb-2 text-center border border-orange-500/20 rounded">✨ Found ${filtered.length} matches for "${query}"</div>`);
+                    } else {
+                        alert("No specific matches found for that mood.");
+                        renderSongs(songs);
+                    }
+                } catch (e) {
+                    filterSongs(query);
+                }
+            }
+        }
+
+        function showAiModal(content, isLoading) {
+            const modal = document.getElementById('aiModal');
+            const contentDiv = document.getElementById('aiModalContent');
+            const title = document.getElementById('aiModalTitle');
+            modal.classList.remove('hidden');
+            if (isLoading) {
+                title.innerHTML = '<i data-lucide="loader-2" class="animate-spin text-orange-400 mr-2"></i> Connecting...';
+                contentDiv.innerHTML = '<div class="h-24 flex items-center justify-center text-slate-500">Seeking wisdom...</div>';
+            } else {
+                title.innerHTML = '<i data-lucide="sparkles" class="text-orange-400 mr-2"></i> Insight';
+                contentDiv.innerHTML = marked.parse(content);
+            }
+            lucide.createIcons();
+        }
+        function closeAiModal() { document.getElementById('aiModal').classList.add('hidden'); }
+
+        // --- PLAYER LOGIC ---
+        function playSong(index) {
+            if (index < 0 || index >= songs.length) return;
+            currentSongIndex = index;
+            const song = songs[index];
+            document.getElementById('currentTitle').textContent = song.name;
+            document.getElementById('currentAlbum').textContent = song.album || 'Unknown Album';
+            renderSongs(songs); 
+            audio.src = song.url;
+            audio.play().then(() => {
+                isPlaying = true;
+                updatePlayIcon();
+            }).catch(e => console.error("Playback failed", e));
+        }
+
+        function togglePlay() {
+            if (currentSongIndex === -1 && songs.length > 0) { playSong(0); return; }
+            if (audio.paused) { audio.play(); isPlaying = true; } 
+            else { audio.pause(); isPlaying = false; }
+            updatePlayIcon();
+            renderSongs(songs);
+            // Fix icon centering issue when toggling
+            const icon = document.getElementById('playIcon');
+            if(isPlaying) icon.classList.remove('ml-1');
+            else icon.classList.add('ml-1');
+        }
+
+        function playNext(isManual) {
+            if (isRepeatOne && !isManual) {
+                audio.currentTime = 0;
+                audio.play();
+                return;
+            }
+
+            let next;
+            if (isShuffle) {
+                // Pick random index
+                next = Math.floor(Math.random() * songs.length);
+            } else {
+                next = currentSongIndex + 1;
+                if (next >= songs.length) next = 0; // Loop playlist
+            }
+            playSong(next);
+        }
+
+        function playPrev() {
+            let prev = currentSongIndex - 1;
+            if (prev < 0) prev = songs.length - 1;
+            playSong(prev);
+        }
+
+        function toggleShuffle() {
+            isShuffle = !isShuffle;
+            const btn = document.getElementById('shuffleBtn');
+            if (isShuffle) {
+                btn.classList.replace('text-slate-400', 'text-orange-500');
+            } else {
+                btn.classList.replace('text-orange-500', 'text-slate-400');
+            }
+        }
+
+        function toggleRepeat() {
+            isRepeatOne = !isRepeatOne;
+            const btn = document.getElementById('repeatBtn');
+            const indicator = document.getElementById('repeatIndicator');
+            
+            if (isRepeatOne) {
+                btn.classList.replace('text-slate-400', 'text-orange-500');
+                indicator.classList.remove('hidden');
+            } else {
+                btn.classList.replace('text-orange-500', 'text-slate-400');
+                indicator.classList.add('hidden');
+            }
+        }
+
+        function toggleMute() {
+            if (audio.volume > 0) {
+                lastVolume = audio.volume;
+                audio.volume = 0;
+                volumeSlider.value = 0;
+            } else {
+                audio.volume = lastVolume;
+                volumeSlider.value = lastVolume;
+            }
+            updateVolumeIcon(audio.volume);
+        }
+
+        function updateVolumeIcon(vol) {
+            const icon = document.getElementById('volumeIcon');
+            const btn = icon.parentElement;
+            
+            // Clear current icon
+            btn.innerHTML = '';
+            
+            // Re-create icon based on volume level
+            let iconName = 'volume-2';
+            if (vol == 0) iconName = 'volume-x';
+            else if (vol < 0.5) iconName = 'volume-1';
+            
+            const i = document.createElement('i');
+            i.setAttribute('data-lucide', iconName);
+            i.id = 'volumeIcon';
+            i.className = 'w-4 h-4';
+            btn.appendChild(i);
+            lucide.createIcons();
+        }
+
+        function updatePlayIcon() {
+            const btn = document.getElementById('playIcon');
+            // Remove ml-1 if playing (pause icon is centered), add it if paused (play icon needs offset)
+            if (isPlaying) {
+                btn.parentElement.innerHTML = '<i id="playIcon" data-lucide="pause" class="w-7 h-7 fill-current"></i>';
+            } else {
+                btn.parentElement.innerHTML = '<i id="playIcon" data-lucide="play" class="w-7 h-7 fill-current ml-1"></i>';
+            }
+            lucide.createIcons();
+        }
+
+        function updateProgress() {
+            if (isNaN(audio.duration)) return;
+            progressBar.value = (audio.currentTime / audio.duration) * 100;
+            document.getElementById('currentTime').textContent = formatTime(audio.currentTime);
+        }
+
+        function formatTime(s) {
+            const m = Math.floor(s / 60);
+            const sec = Math.floor(s % 60);
+            return `${m}:${sec < 10 ? '0' + sec : sec}`;
+        }
+    </script>
+</body>
+</html>
